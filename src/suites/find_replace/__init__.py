@@ -1,0 +1,1 @@
+"""Find-replace suite scaffold."""
