@@ -1,0 +1,25 @@
+[project]
+name = "format-llm-tests"
+version = "0.1.0"
+description = "Benchmark scaffold for measuring how prompt formats affect LLM performance."
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic",
+    "openai",
+    "pandas",
+    "pydantic",
+    "python-dotenv",
+    "pyyaml",
+    "scipy",
+    "statsmodels",
+    "tiktoken",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
