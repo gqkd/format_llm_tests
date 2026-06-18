@@ -1,6 +1,6 @@
 # Project Memory
 
-This repository contains the scaffold for a scientific benchmark that measures how prompt format affects LLM performance across XML, Markdown, JSON, YAML, plain text, CSV, and TOON. The protocol targets only current closed-weight production models, not open-weight or legacy models.
+This repository contains the scaffold for a scientific benchmark that measures how prompt format affects LLM performance across XML, Markdown, JSON, YAML, plain text, CSV, and TOON. The core protocol targets current closed-weight production models; local Ollama models are tracked as a separate extension for Jarvis1 smoke tests and comparisons.
 
 ## Models Under Test
 
@@ -11,6 +11,10 @@ This repository contains the scaffold for a scientific benchmark that measures h
 - Anthropic Claude Haiku 4.5: `claude-haiku-4-5`
 
 Verify vendor API slugs against current API documentation before implementing runners.
+
+## Local/Ollama Models
+
+- Qwen 2.5 7B Instruct local quantized: `qwen2.5:7b-instruct-q4_K_M` via Ollama generation.
 
 ## Repository Layout
 

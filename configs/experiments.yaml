@@ -1,0 +1,416 @@
+experiments:
+  - question_id: D1
+    suite: classification
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - prose
+        - markdown
+        - xml
+      notes: Input task content is rendered in the selected wrapper; output instruction is fixed.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - classification_option_order_rotated
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: Spread across frontier models is <=2 percentage points.
+      falsification_threshold: Falsified if any frontier model has max-min accuracy spread >2pp across prose/markdown/xml.
+
+  - question_id: D2
+    suite: classification
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - xml
+        - markdown
+      dimensions:
+        - instruction_heavy
+        - multi_section
+      notes: Claude-only instruction-heavy classification prompts.
+    models:
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    metrics:
+      - accuracy
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - classification_option_order_rotated
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: XML accuracy is greater than or equal to Markdown on multi-section Claude prompts.
+      falsification_threshold: Falsified if Markdown exceeds XML by >1pp on Claude aggregate accuracy.
+
+  - question_id: D11
+    suite: long_context
+    manipulated_variable:
+      axis: instruction_position
+      levels:
+        - head
+        - tail
+        - both
+      notes: Data wrapping is fixed; only instruction placement changes.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy_citation_fidelity
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - output_format_fixed
+      - task_content_fixed_across_formats
+      - long_context_needle_position_fixed_for_instruction_position
+    hypothesis:
+      expected: Tail instruction placement is greater than or equal to head placement.
+      falsification_threshold: Falsified if head exceeds tail by >2pp accuracy/citation-fidelity.
+
+  - question_id: D3
+    suite: extraction
+    manipulated_variable:
+      axis: q-out
+      levels:
+        - structured_native
+        - prompt_only_json
+      notes: Input representation is fixed; only output constraint mechanism changes.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - schema_compliance
+      - field_f1
+      - token_output
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - input_format_fixed
+      - task_content_fixed_across_output_modes
+    hypothesis:
+      expected: Native structured output reaches >=99% compliance while prompt-only JSON is 85-95%.
+      falsification_threshold: Falsified if native compliance <99% or prompt-only compliance >98% with no native advantage.
+
+  - question_id: D4
+    suite: reasoning
+    manipulated_variable:
+      axis: q-out
+      levels:
+        - json_strict_direct
+        - reason_then_convert
+      notes: Reasoning input is fixed; only answer production protocol changes.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy_final_answer
+      - schema_compliance
+      - token_output
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - input_format_fixed
+      - task_content_fixed_across_output_modes
+    hypothesis:
+      expected: Reason-then-convert improves final-answer accuracy by at least 5pp over direct strict JSON.
+      falsification_threshold: Falsified if reason-then-convert advantage is <5pp.
+
+  - question_id: D5
+    suite: nested_data
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - json
+        - yaml
+        - markdown
+        - xml
+      notes: Same nested canonical record, different input renderers.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy_token
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: YAML and Markdown are greater than or equal to JSON and XML on nested-data accuracy.
+      falsification_threshold: Falsified if max(yaml, markdown) is < max(json, xml) by >2pp.
+
+  - question_id: D6
+    suite: find_replace
+    manipulated_variable:
+      axis: q-out
+      levels:
+        - markdown
+        - xml
+        - json
+      notes: Code/input task is fixed; requested patch/output envelope varies.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - pass_at_1
+      - token_output
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - input_format_fixed
+      - task_content_fixed_across_output_modes
+    hypothesis:
+      expected: XML is last and at least 10pp below the best output mode.
+      falsification_threshold: Falsified if XML is not last or is <10pp below the best pass@1 rate.
+
+  - question_id: D7tab
+    suite: tabular
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - markdown_table
+        - csv
+        - json_records
+        - toon
+      dimensions:
+        - rows_50
+        - rows_500
+        - rows_2000
+        - rows_5000
+      notes: Table row-count curve over compact and verbose formats.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy_token
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: Compact formats win below context-pressure threshold; verbose formats degrade less above threshold.
+      falsification_threshold: Falsified if no row-count-dependent crossover or slope difference is observed.
+
+  - question_id: D7
+    suite: nested_data
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - yaml
+        - markdown
+        - json
+        - xml
+      notes: Claude-only nested-data comparison.
+    models:
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+    metrics:
+      - accuracy_token
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: On Claude models, XML is not the worst nested-data format.
+      falsification_threshold: Falsified if XML has the lowest accuracy for every Claude model by >=2pp.
+
+  - question_id: D8
+    suite: multi_agent
+    manipulated_variable:
+      axis: state_serialization
+      levels:
+        - json
+        - markdown
+        - compact_pseudocode_yaml
+      notes: Protocol labels this Q-IN+OUT; benchmark keeps output protocol fixed and varies serialized agent state only.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - success_rate
+      - token_input
+      - success_rate_total_input_tokens
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - multi_agent_output_protocol_fixed
+      - fixed_simple_orchestrator
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: Compact state serialization reduces input tokens by 40% without losing more than 3pp success rate.
+      falsification_threshold: Falsified if token reduction <40% or success-rate loss >3pp.
+
+  - question_id: D9
+    suite: long_context
+    manipulated_variable:
+      axis: q-in
+      levels:
+        - xml_document
+        - json_array
+      notes: Long-context wrapping only; instructions and answer constraints fixed.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy_citation_fidelity
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - output_format_fixed
+      - task_content_fixed_across_formats
+      - long_context_needle_position_randomized
+    hypothesis:
+      expected: XML document wrapping is at least 7pp better than JSON array wrapping.
+      falsification_threshold: Falsified if XML advantage is <7pp.
+
+  - question_id: D10
+    suite: transversal
+    manipulated_variable:
+      axis: cost_probe
+      levels:
+        - json_strict
+      notes: Cross-suite Q-OUT cost probe with strict JSON held constant.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - token_input
+      - token_output
+      - token_ratio_output_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: repeat_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - input_format_fixed
+      - json_strict_output_fixed
+      - task_content_fixed_across_output_modes
+    hypothesis:
+      expected: Strict JSON output tokens are at least 4x input-format overhead tokens.
+      falsification_threshold: Falsified if median output/input overhead ratio is <4.
+
+  - question_id: D14
+    suite: classification
+    manipulated_variable:
+      axis: pure_vs_mixed
+      levels:
+        - pure
+        - mixed
+      dimensions:
+        - classification
+        - reasoning
+      notes: Uses classification and reasoning items; suite field names primary suite for validator compatibility.
+    models:
+      - gpt-5.5
+      - gpt-5.4
+      - claude-opus-4-8
+      - claude-sonnet-4-6
+      - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
+    metrics:
+      - accuracy
+      - accuracy_final_answer
+      - token_input
+      - cost_usd
+    repetition:
+      seeds_or_repeated_calls: 3
+      temperature_policy: seed_when_supported_else_repeated_calls
+    fixed_confounders:
+      - format_separator_casing_spacing_constant
+      - classification_option_order_rotated
+      - output_format_fixed
+      - task_content_fixed_across_formats
+    hypothesis:
+      expected: Mixed-format prompts perform worse than pure-format prompts.
+      falsification_threshold: Falsified if mixed is not worse by at least 2pp pooled across classification and reasoning.
