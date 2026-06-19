@@ -408,8 +408,11 @@ Solo modelli **attualmente in produzione**, per contenere i costi di esecuzione.
 | Anthropic | Claude Opus 4.8 | Frontiera Anthropic |
 | Anthropic | Claude Sonnet 4.6 | Fascia media Anthropic |
 | Anthropic | Claude Haiku 4.5 | Fascia veloce/economica Anthropic |
+| Open-weight (locale) | Qwen2.5 (via Ollama) | Riferimento open-weight/locale; usato spesso come fallback e orchestratore locale |
 
-**Limite esplicito del protocollo:** l'assenza di modelli open-weight e di modelli piccoli/vecchi significa che questo protocollo **non** può misurare il "format tax" legato alla scala. L'evidenza esistente (Format Tax 2026, He et al.) copre già quel fronte: lì si vede che i modelli open-weight perdono accuratezza sostanziale sotto vincoli di formato stretti mentre i frontiera closed no. Qui si studiano solo i modelli che l'utente userebbe davvero in produzione, quindi i risultati vanno letti come specifici di questa fascia (frontiera/quasi-frontiera closed) e non estesi ai modelli locali o piccoli.
+**Sul parametro di reasoning/effort:** tutti i modelli vengono eseguiti a un livello di effort/reasoning **medio** come default fisso, per non confondere la variabile-formato con la variabile-effort. OpenAI espone `reasoning_effort` (si usa `medium`); Anthropic espone l'extended thinking con budget di token (si fissa un budget intermedio equivalente); Qwen via Ollama si esegue con la sua configurazione di reasoning di default a livello comparabile. **Eccezione:** in D3 e D4 l'effort diventa una **variabile esplicita** testata a più livelli (vedi quei due esperimenti), perché tocca direttamente il ragionamento e potrebbe interagire con il vincolo di output — fissarlo lì nasconderebbe l'effetto che quei due esperimenti vogliono misurare.
+
+**Limite esplicito del protocollo:** la presenza di **un solo** modello open-weight/locale (Qwen2.5) e l'assenza di modelli piccoli/vecchi significano che questo protocollo offre un confronto open-vs-closed solo **indicativo**, non sistematico. Qwen permette di vedere se le tendenze osservate sui modelli closed di frontiera reggono anche su un open-weight locale (ed è il modello che l'utente usa davvero come fallback/orchestratore), ma un singolo punto open non basta a caratterizzare il "format tax" legato alla scala: per quello resta valida l'evidenza esistente (Format Tax 2026, He et al.), dove i modelli open-weight perdono accuratezza sostanziale sotto vincoli di formato stretti mentre i frontiera closed no. I risultati su Qwen vanno quindi letti come segnale sul caso d'uso specifico dell'utente, non come misura generale dei modelli open. Inoltre Qwen via Ollama **non** dispone di structured output garantito a livello di vendor come quello nativo di OpenAI/Anthropic: negli esperimenti Q-OUT che usano lo structured output nativo (D3) Qwen va trattato a parte (output strutturato ottenibile solo via libreria di constrained decoding lato Ollama o via istruzione, da dichiarare nel risultato).
 
 ### 5.2 Principi di design
 
@@ -417,8 +420,8 @@ Solo modelli **attualmente in produzione**, per contenere i costi di esecuzione.
 2. Tenere il contenuto identico tra le condizioni di formato; cambia solo il wrapper di markup. Canonicalizzare via una singola rappresentazione sorgente, resa in ciascun formato da una funzione di templating deterministica.
 3. Fissare per ogni formato uno stile costante di separatore, casing e spaziatura, così che la variabile sotto test sia il formato e non micro-dettagli tipografici.
 4. Pre-registrare le ipotesi con predizioni direzionali prima di eseguire; riportare gli effetti osservati con intervalli di confidenza al 95%.
-5. ≥3 seed per cella dove il modello espone la temperature; per i modelli reasoning senza temperature, ≥3 call ripetute.
-6. Conteggio token per call (input + output) col contatore ufficiale di ciascun vendor (tiktoken per OpenAI, count_tokens API per Anthropic).
+5. ≥3 seed per cella dove il modello espone la temperature; per i modelli reasoning senza temperature, ≥3 call ripetute. Effort/reasoning fissato a medio per tutti (eccetto D3 e D4, dove è variabile).
+6. Conteggio token per call (input + output) col contatore ufficiale di ciascun vendor (tiktoken per OpenAI, count_tokens API per Anthropic, tokenizer del modello via Ollama per Qwen).
 7. Costo in USD ai prezzi per-token in vigore al momento del run; input e output contati separatamente.
 8. Risultati sempre riportati **per modello**, mai aggregati tra vendor.
 9. **Criterio di falsificazione comune:** un'ipotesi è considerata smentita se il risultato reale è fuori dalla direzione prevista a p<0,01 con effect size |δ|>0,1 (Wilcoxon signed-rank su item appaiati; correzione Bonferroni sui confronti multipli di formato all'interno di uno stesso task).
@@ -433,15 +436,15 @@ La domanda di fondo di questo utente è: **quanto di tutto questo lo riguarda da
 
 #### D1 — La struttura del prompt cambia davvero l'accuratezza ai miei usi?
 - **Cosa testa [Q-IN]:** stesso compito di classificazione, dato al modello in tre vesti — prosa libera, Markdown con sezioni, tag XML — a contenuto identico.
-- **Come:** Suite Classificazione (500 item: MMLU stratificato, DDXPlus, Sports). 3 seed. Si misura l'accuratezza per formato su tutti e quattro i modelli.
+- **Come:** Suite Classificazione (500 item: MMLU stratificato, DDXPlus, Sports). 3 seed. Si misura l'accuratezza per formato su tutti e sei i modelli.
 - **Ipotesi:** sui modelli di frontiera attuali lo spread tra il miglior e il peggior formato di input è piccolo (≤2 pp su GPT-5.5 e Opus 4.8; eventualmente un po' più ampio su Haiku 4.5).
 - **Perché conta:** dice a questo utente se "fare il prompt per bene" è una competenza che gli rende o folklore. Se lo spread è minimo, il messaggio è liberatorio: scrivi chiaro in prosa e non perdere tempo a taggare. Se è ampio, è il segnale che la struttura va curata.
 
-#### D2 — Su Claude conviene usare i tag XML che Anthropic raccomanda, o basta Markdown?
-- **Cosa testa [Q-IN]:** stesso prompt su Claude (Opus 4.8, Sonnet 4.6, Haiku 4.5) in due versioni — scaffolding XML (`<context>`, `<instructions>`) vs sezioni Markdown equivalenti.
-- **Come:** sottoinsieme della Suite Classificazione + un set di task istruzione-pesanti (prompt con più sezioni). Si misura il delta XML−Markdown.
-- **Ipotesi:** su Claude l'XML dà un vantaggio piccolo ma positivo rispetto a Markdown su prompt multi-sezione; su prompt semplici i due sono equivalenti.
-- **Perché conta:** Anthropic raccomanda XML, ma per chi scrive a mano imparare i tag è un costo. Il test dice se quel costo si ripaga in qualità o se Markdown basta ai suoi usi.
+#### D2 — Quale formato di input conviene per prompt istruzione-pesanti, e l'XML raccomandato da Anthropic è davvero il migliore su Claude?
+- **Cosa testa [Q-IN]:** stesso prompt istruzione-pesante reso nei cinque formati non-tabellari — plain text, Markdown, XML, JSON, YAML — su tutti e sei i modelli (non solo Claude). La domanda specifica su Anthropic (XML vs Markdown su Claude) diventa un caso particolare letto dentro un confronto completo.
+- **Come:** sottoinsieme della Suite Classificazione + un set di task istruzione-pesanti (prompt con più sezioni: ruolo, contesto, istruzioni, esempi). Si misura l'accuratezza per formato e per modello, più i token.
+- **Ipotesi:** su Claude l'XML dà un vantaggio piccolo ma positivo rispetto a Markdown su prompt multi-sezione, e non è il peggiore; su GPT prevale Markdown; su Qwen l'effetto è più marcato che sui frontiera closed. Su prompt semplici i formati convergono.
+- **Perché conta:** Anthropic raccomanda XML, ma per chi scrive a mano imparare i tag è un costo. Testare tutti i formati su tutti i modelli dice se la raccomandazione regge in un confronto completo e se vale solo per Claude o anche altrove. (CSV/TOON esclusi: il contenuto non è tabellare.)
 
 #### D11 — La posizione delle istruzioni nel prompt cambia il risultato? (e i vendor si contraddicono)
 - **Cosa testa [Q-IN]:** stesso prompt lungo con le istruzioni messe in tre posizioni — solo all'inizio, solo alla fine (dopo i dati), a entrambe le estremità.
@@ -457,29 +460,29 @@ La domanda di fondo di questo utente è: **quanto di tutto questo lo riguarda da
 
 Le sue domande sono decisioni di codice: come strutturare le call perché l'app sia affidabile ed economica.
 
-#### D3 — Per output che il mio codice può parsare, servono gli structured output nativi o basta chiedere "rispondi in JSON" nel prompt?
-- **Cosa testa [Q-OUT]:** stesso compito di estrazione in due modi — (a) JSON Schema strict / structured output nativi del vendor, (b) sola istruzione testuale nel prompt che chiede JSON, senza vincolo nativo.
-- **Come:** Suite Estrazione (5 schemi × 60 documenti). Si misura la percentuale di risposte che il parser Pydantic accetta al primo tentativo, per modello e per modalità.
-- **Ipotesi:** strict / nativo ≥99% di parsing riuscito; prompt-only 85–95%. Il margine è ampio su tutti e quattro i modelli.
-- **Perché conta:** è la differenza tra un'app che si rompe nel 5–15% dei casi e una che si rompe in meno dello 0,1%. È la verifica che giustifica l'intera scelta di adottare gli structured output invece di parsare a mano con try/except e regex fragili.
+#### D3 — Per output che il mio codice può parsare, servono gli structured output nativi o basta chiedere "rispondi in JSON" nel prompt? (e quanto incide l'effort)
+- **Cosa testa [Q-OUT]:** stesso compito di estrazione in due modi — (a) JSON Schema strict / structured output nativi del vendor, (b) sola istruzione testuale nel prompt che chiede JSON, senza vincolo nativo. **L'effort qui è una variabile:** ogni modalità viene testata a effort basso/medio/alto (OpenAI `reasoning_effort`; Anthropic budget di extended thinking; Qwen configurazione equivalente via Ollama), per vedere se alzare il ragionamento migliora la compliance del prompt-only fino a chiudere il divario col nativo.
+- **Come:** Suite Estrazione (5 schemi × 60 documenti). Si misura la percentuale di risposte che il parser Pydantic accetta al primo tentativo, per modello, modalità e livello di effort. **Qwen** non ha structured output nativo a livello vendor: la modalità (a) per Qwen va ottenuta via constrained decoding lato Ollama (o, se non disponibile, marcata come non confrontabile e tenuta fuori dal confronto nativo).
+- **Ipotesi:** strict/nativo ≥99% di parsing riuscito a ogni livello di effort; prompt-only 85–95% a effort medio, con un miglioramento ad alto effort che però **non** raggiunge il nativo. Il margine è ampio su tutti i modelli closed; su Qwen il prompt-only parte più in basso.
+- **Perché conta:** è la differenza tra un'app che si rompe nel 5–15% dei casi e una che si rompe in meno dello 0,1%. Testare anche l'effort dice se "basta far ragionare di più il modello" è un'alternativa al vincolo nativo (ipotesi: no). È la verifica che giustifica l'adozione degli structured output invece di parsare a mano con try/except e regex fragili.
 
-#### D4 — Quando il compito richiede ragionamento, forzo il JSON da subito o faccio ragionare libero e poi converto?
-- **Cosa testa [Q-OUT]:** su task di ragionamento, due pipeline a confronto — una sola call che produce direttamente JSON strict, contro due passi (prima ragionamento in linguaggio naturale libero, poi una seconda call che incassa il risultato in JSON).
-- **Come:** Suite Ragionamento (GSM8K, ZebraLogic, MATH-500; 300 item ciascuna). Si misura l'accuratezza del risultato finale per pipeline.
-- **Ipotesi:** il pattern a due passi (ragiona-poi-converti) batte il JSON strict diretto di ≥5 pp su tutti i modelli.
-- **Perché conta:** decide la forma delle tue call quando c'è logica di mezzo. Se il due-passi vince, vincolare il modello al JSON mentre ragiona gli toglie capacità, e ti conviene spendere una call in più per non perdere accuratezza. (Ancora: Tam 2024 e Format Tax 2026 — ma quei lavori non coprono i modelli in produzione attuali, che potrebbero aver ridotto il divario.)
+#### D4 — Quando il compito richiede ragionamento, forzo il JSON da subito o faccio ragionare libero e poi converto? (e quanto incide l'effort)
+- **Cosa testa [Q-OUT]:** su task di ragionamento, due pipeline a confronto — una sola call che produce direttamente JSON strict, contro due passi (prima ragionamento in linguaggio naturale libero, poi una seconda call che incassa il risultato in JSON). **L'effort qui è una variabile:** entrambe le pipeline testate a effort basso/medio/alto. È l'interazione più interessante del protocollo, perché alzare l'effort fa ragionare di più il modello *internamente* e potrebbe rendere il vincolo JSON-diretto meno penalizzante, riducendo il vantaggio del due-passi.
+- **Come:** Suite Ragionamento (GSM8K, ZebraLogic, MATH-500; 300 item ciascuna). Si misura l'accuratezza del risultato finale per pipeline e per livello di effort, su tutti e sei i modelli.
+- **Ipotesi:** a effort basso/medio il pattern a due passi batte il JSON strict diretto di ≥5 pp su tutti i modelli; ad alto effort il divario si riduce sui frontiera closed (che ragionano molto internamente) ma resta su Qwen. In nessun caso il JSON-diretto supera il due-passi.
+- **Perché conta:** decide la forma delle tue call quando c'è logica di mezzo. Se il due-passi vince a effort medio (il default), conviene spendere una call in più per non perdere accuratezza; se ad alto effort il divario sparisce, l'alternativa diventa "una sola call ad alto effort" — ma a costo maggiore. (Ancora: Tam 2024 e Format Tax 2026 — non coprono i modelli attuali né l'interazione con l'effort.)
 
 #### D5 — Come conviene impacchettare i dati strutturati che metto dentro il prompt?
-- **Cosa testa [Q-IN]:** stessi dati (oggetti annidati, config) passati nel prompt in quattro formati — JSON, YAML, Markdown, XML.
+- **Cosa testa [Q-IN]:** stessi dati (oggetti annidati, config) passati nel prompt nei cinque formati non-tabellari — plain text, Markdown, XML, JSON, YAML — su tutti e sei i modelli.
 - **Come:** Suite Dati annidati (config Terraform-like, 6–7 livelli, calibrata alla fascia 40–60% di accuratezza; ~1.000 domande per cella). Si misura accuratezza delle risposte e token consumati, per formato e modello.
-- **Ipotesi:** YAML e Markdown più economici (in token) e in genere più accurati di JSON e XML su GPT-5.5; su Claude vedi D7 per il caso specifico dell'XML.
-- **Perché conta:** è una decisione che prendi ogni volta che dai dati in pasto a un prompt, e tocca due cose insieme — quanto bene il modello li capisce e quanto ti costano. Stabilisce il formato-dato di default per le tue chiamate.
+- **Ipotesi:** YAML e Markdown più economici (in token) e in genere più accurati di JSON e XML su GPT e Qwen; su Claude vedi D7 per il caso specifico dell'XML. Plain text debole sui dati molto annidati (perde la struttura).
+- **Perché conta:** è una decisione che prendi ogni volta che dai dati in pasto a un prompt, e tocca due cose insieme — quanto bene il modello li capisce e quanto ti costano. Stabilisce il formato-dato di default per le tue chiamate. (CSV/TOON esclusi: i dati sono annidati, non tabellari — quelli sono coperti da D7tab.)
 
 #### D6 — Per far modificare codice al modello (find-replace, diff), quale formato di output regge meglio?
-- **Cosa testa [Q-OUT]:** bug da correggere chiedendo l'output di modifica in Markdown, XML e JSON; il codice risultante viene eseguito sui test.
-- **Come:** Suite Editing find-replace (30 bug costruiti a mano, N=30 per cella, replica del protocollo Checksum). Si misura il pass-rate dei test per formato.
-- **Ipotesi:** l'output XML resta sotto Markdown e JSON sul find-replace di ≥10 pp di pass-rate (XML fatica a esprimere pattern di match esatto).
-- **Perché conta:** se costruisci tool che editano codice, il formato in cui chiedi la patch incide sulla riuscita. Verifica sui modelli in produzione un effetto finora visto solo su Haiku 4.5 in un singolo blog (Checksum).
+- **Cosa testa [Q-OUT]:** bug da correggere chiedendo l'output di modifica in tutti i formati di output applicabili a una patch — Markdown (diff/blocco), XML, JSON, YAML, plain text (diff unificato) — su tutti e sei i modelli; il codice risultante viene eseguito sui test. **Nota sull'impostazione Q-OUT:** solo il JSON può usare lo structured output nativo; gli altri formati si ottengono via istruzione testuale, quindi il confronto è "JSON nativo-strict vs altri-via-prompt" e va letto come tale, non come parità di condizioni.
+- **Come:** Suite Editing find-replace (30 bug costruiti a mano, N=30 per cella, replica del protocollo Checksum). Si misura il pass-rate dei test per formato e modello.
+- **Ipotesi:** l'output XML resta in fondo sul find-replace (≥10 pp sotto il migliore: XML fatica a esprimere pattern di match esatto); plain-text-diff e Markdown-diff competitivi; JSON intermedio.
+- **Perché conta:** se costruisci tool che editano codice, il formato in cui chiedi la patch incide sulla riuscita. Verifica sui modelli in produzione un effetto finora visto solo su Haiku 4.5 in un singolo blog (Checksum). (CSV/TOON esclusi: una patch di codice non è una tabella.)
 
 #### D7tab — Quanto degradano i modelli sui dati tabellari ampi, e quale formato regge? *(E7)*
 - **Cosa testa [Q-IN]:** stessa tabella passata nel prompt in quattro rappresentazioni testuali — Markdown table, CSV, JSON records, TOON — a dimensioni crescenti (50, 500, 2.000, 5.000 righe).
@@ -506,33 +509,23 @@ Le sue domande sono decisioni di codice: come strutturare le call perché l'app 
 
 #### D8 — Per lo stato che gli agenti si passano tra loro, un formato compatto fa risparmiare abbastanza token da valerne la pena?
 - **Il contesto del problema:** in un sistema multi-agente, a ogni passo gli agenti si passano lo "stato" (cosa è stato fatto, risultati intermedi, piano). Se è in JSON verboso, ogni turno aggiunge token e su workflow lunghi il conto di input esplode, perché lo stato si accumula e viene rielaborato a ogni passo. Un approccio studiato in "CodeAgents" codifica lo stato in **pseudocodice compatto** invece che in JSON, mostrando tagli di token molto grandi su un benchmark agentico.
-- **Cosa testa [Q-IN + Q-OUT]:** task multi-step in stile agentico, orchestratore tenuto fisso (LangGraph), stesso workflow con lo stato passato in tre formati — JSON, Markdown, e una forma compatta tipo pseudocodice/YAML; si misurano token di input totali e success rate (task completate correttamente).
+- **Cosa testa [Q-IN + Q-OUT]:** task multi-step in stile agentico, orchestratore tenuto fisso (LangGraph), stesso workflow con lo stato passato in tutti i formati applicabili — JSON, Markdown, YAML, XML, plain text, più una forma compatta tipo pseudocodice; si misurano token di input totali e success rate (task completate correttamente). Su tutti e sei i modelli.
 - **Come:** Suite Multi-agente (50 task stile GAIA). 3 run.
-- **Ipotesi specifica:** la forma compatta taglia i token di input di ≥40% vs JSON, **senza** far calare il success rate di più di 3 pp.
-- **Perché conta:** è economia diretta dei tuoi sistemi. Se vero, dimezzi quasi i costi di input di un sistema multi-agente cambiando solo come codifichi lo stato, a parità di risultato. Se il risparmio si paga in affidabilità persa, il JSON verboso ma robusto resta la scelta giusta — e lo sai. *Caveat sull'ancora:* lo studio CodeAgents confonde formato, brevità e decomposizione multi-agente, e usa una baseline debole; questo test isola meglio la variabile formato.
+- **Ipotesi specifica:** la forma compatta (pseudocodice) e YAML tagliano i token di input in modo netto vs JSON e XML (compatto ≥40% sotto JSON), **senza** far calare il success rate di più di 3 pp; XML lo stato più costoso.
+- **Perché conta:** è economia diretta dei tuoi sistemi. Se vero, riduci molto i costi di input di un sistema multi-agente cambiando solo come codifichi lo stato, a parità di risultato. Se il risparmio si paga in affidabilità persa, il formato verboso ma robusto resta la scelta giusta — e lo sai. *Caveat sull'ancora:* lo studio CodeAgents confonde formato, brevità e decomposizione multi-agente, e usa una baseline debole; questo test isola meglio la variabile formato. (CSV/TOON esclusi: lo stato di un agente non è una tabella uniforme.)
 
 #### D9 — Per i documenti recuperati in una pipeline RAG, conviene avvolgerli in tag XML o passarli come array JSON?
 - **Il contesto del problema:** in RAG recuperi N pezzi di documento dal vector DB e li impacchetti nel prompt prima di chiedere al modello di rispondere citando le fonti. Due modi tipici: avvolgere ogni pezzo in tag XML (`<document><source>…</source><document_content>…</document_content></document>`) oppure passarli come lista JSON di oggetti. La guida ufficiale OpenAI afferma che nei loro test a contesto lungo l'array JSON ha reso **particolarmente male** e il wrapping XML bene — ma è un'affermazione interna, non verificata da terzi né testata su Claude.
-- **Cosa testa [Q-IN]:** stesso set di documenti recuperati e stesse domande, wrapping XML vs array JSON; si misura accuratezza delle risposte e, dove possibile, fedeltà delle citazioni, su GPT-5.5 e sui tre Claude.
+- **Cosa testa [Q-IN]:** stesso set di documenti recuperati e stesse domande, avvolti nei cinque formati non-tabellari — XML `<document>`, array JSON, Markdown (heading + metadati), YAML, plain text con delimitatori; si misura accuratezza delle risposte e, dove possibile, fedeltà delle citazioni, su tutti e sei i modelli.
 - **Come:** Suite Contesto lungo (200 item × lunghezze 8K/32K/128K, e 1M dove supportato), con questa variabile di wrapping.
-- **Ipotesi specifica:** il wrapping XML batte l'array JSON di ≥7 pp su ogni modello.
-- **Perché conta:** è una decisione di architettura RAG che prendi una volta e che poi vale per ogni query del sistema. Se l'XML vince in modo netto e consistente, è la scelta di default per il packing dei chunk; se la differenza è piccola, scegli in base ad altri criteri (parsing, leggibilità dei log).
+- **Ipotesi specifica:** il wrapping XML e quello Markdown battono l'array JSON di ≥7 pp su ogni modello (replicando la tesi OpenAI "JSON scarso per contesto lungo"); plain text il più debole sui contesti molto lunghi.
+- **Perché conta:** è una decisione di architettura RAG che prendi una volta e che poi vale per ogni query del sistema. Se XML/Markdown vincono in modo netto e consistente, sono la scelta di default per il packing dei chunk; se la differenza è piccola, scegli in base ad altri criteri (parsing, leggibilità dei log). (CSV/TOON esclusi: i chunk sono documenti testuali, non righe tabellari.)
 
-#### D10 — Quanto pesano davvero i token di output rispetto a quelli di input, e cosa cambia per il design degli schemi?
-- **Cosa testa [economia]:** ai prezzi di listino dei vendor, il rapporto di costo tra un token di output e uno di input quando si usa output JSON Schema strict.
-- **Come:** strumentazione di costo su tutte le suite Q-OUT; calcolo costo = (token_in × tariffa_in) + (token_out × tariffa_out) per modello.
-- **Ipotesi specifica:** i token di output costano ≥4× quelli di input su tutti e quattro i modelli quando si usa JSON Schema strict.
-- **Perché conta:** governa il budget dell'intero sistema. Se il rapporto è confermato, la regola operativa è "tieni gli schemi di output il più stretti possibile, appiattisci dove puoi, non chiedere campi che puoi derivare a valle". Per chi ottimizza costi/latenza è una delle leve a impatto maggiore.
-
----
-
-### 5.6 Domanda trasversale a tutte le categorie
-
-#### D14 — Mescolare i formati nello stesso prompt peggiora le cose? *(E5)*
-- **Cosa testa [Q-IN]:** stesso compito con prompt a **formato puro** (tutto Markdown, o tutto XML) vs prompt **deliberatamente misto** (istruzioni in Markdown, un esempio in JSON, dati in XML, tutto insieme) — lo scenario che capita davvero quando si assembla un prompt da pezzi di provenienza diversa.
-- **Come:** sottoinsieme delle suite Classificazione e Ragionamento, con la coppia puro/misto come variabile. Si misura il delta di accuratezza.
-- **Ipotesi:** il prompt misto fa peggio del puro di una misura piccola ma rilevabile su almeno alcuni modelli; l'effetto è maggiore quando i formati misti competono nella stessa sezione (es. dati XML dentro istruzioni Markdown).
-- **Perché conta:** è lo scenario reale di chiunque assembli prompt da template, snippet e dati eterogenei. Se il mix degrada le prestazioni, la regola operativa è semplice e forte: "scegli un formato e tienilo per tutto il prompt". Nessuno studio pubblicato l'ha verificato — buco reale.
+#### D10 — Quanto pesano davvero i token di output rispetto a quelli di input, e quale formato di output è più economico?
+- **Cosa testa [economia]:** ai prezzi di listino dei vendor, due cose insieme — (a) il rapporto di costo tra un token di output e uno di input; (b) il costo relativo dei diversi formati di output a parità di informazione resa (JSON strict nativo vs gli altri formati ottenuti via istruzione: Markdown, YAML, XML, plain text). Su tutti e sei i modelli.
+- **Come:** strumentazione di costo su tutte le suite Q-OUT; calcolo costo = (token_in × tariffa_in) + (token_out × tariffa_out) per modello e per formato di output. Per Qwen locale il "costo" è espresso in token e tempo, non in tariffa vendor (da segnalare separatamente).
+- **Ipotesi specifica:** i token di output costano ≥4× quelli di input su tutti i modelli closed; tra i formati di output, XML il più costoso in token e YAML/plain tra i più economici, con JSON intermedio ma con il vantaggio della garanzia nativa.
+- **Perché conta:** governa il budget dell'intero sistema. Se il rapporto output/input è confermato, la regola operativa è "tieni gli schemi di output il più stretti possibile, appiattisci dove puoi, non chiedere campi che puoi derivare a valle"; e la scelta del formato di output diventa anche una scelta di costo, non solo di parsing. Per chi ottimizza costi/latenza è una delle leve a impatto maggiore.
 
 ---
 
@@ -552,40 +545,42 @@ Le sue domande sono decisioni di codice: come strutturare le call perché l'app 
 | D8 stato agenti compatto | C | Multi-agente | Q-IN+OUT | CodeAgents (con caveat) |
 | D9 wrapping RAG XML vs JSON | C | Contesto lungo | Q-IN | OpenAI (non verificato terzi) |
 | D10 economia output | C | trasversale Q-OUT | economia | prezzi pubblici |
-| D14 formati misti (E5) | trasversale | Classificazione + Ragionamento | Q-IN | nessuna (buco) |
 
 ### 5.8 Suite di task (specifiche)
 
-- **Classificazione:** 500 item — MMLU stratificato (10 materie × 50), DDXPlus medico (500), Sports/BIG-Bench (500). Metrica: accuratezza, substring match su gold canonicalizzato.
-- **Ragionamento:** 300 item ciascuna — GSM8K, ZebraLogic, MATH-500. Metrica: accuratezza del risultato finale.
-- **Estrazione:** 5 schemi × 60 documenti (protocollo ExtractBench). Metrica: F1 a livello di campo + tasso di compliance Pydantic al primo tentativo.
-- **Find-replace:** 30 bug costruiti a mano, N=30 per cella. Metrica: pass@1 via esecuzione test.
-- **Dati annidati:** config Terraform-like (6–7 livelli), ~1.000 domande per cella, calibrate a 40–60%. Metrica: accuratezza (substring) + token.
-- **Tabellare (nuova):** tabelle a 50/500/2.000/5.000 righe × {Markdown table, CSV, JSON records, TOON} × {lookup, aggregazione, filtro+conteggio}. Metrica: accuratezza + token; output = curva accuratezza/righe.
-- **Contesto lungo:** 200 item × lunghezze 8K/32K/128K (+1M dove supportato); usata sia per D9 (wrapping) sia per D11 (posizione istruzioni). Metrica: accuratezza + fedeltà citazioni.
-- **Multi-agente:** 50 task stile GAIA, orchestratore LangGraph fisso. Metrica: success rate + token input totali + costo.
+I formati testati per ciascuna suite seguono la regola dell'**applicabilità al tipo di contenuto**: i cinque formati non-tabellari (plain, Markdown, XML, JSON, YAML) sui contenuti testuali/annidati; i sette completi (i cinque + CSV + TOON) solo sui contenuti tabellari.
+
+- **Classificazione:** 500 item — MMLU stratificato (10 materie × 50), DDXPlus medico (500), Sports/BIG-Bench (500). Formati: cinque non-tabellari. Metrica: accuratezza, substring match su gold canonicalizzato.
+- **Ragionamento:** 300 item ciascuna — GSM8K, ZebraLogic, MATH-500. Formati: cinque non-tabellari (Q-IN); per D4 le due pipeline × tre livelli di effort. Metrica: accuratezza del risultato finale.
+- **Estrazione:** 5 schemi × 60 documenti (protocollo ExtractBench). Q-OUT: nativo-strict vs prompt-only × tre livelli di effort (D3). Metrica: F1 a livello di campo + tasso di compliance Pydantic al primo tentativo.
+- **Find-replace:** 30 bug costruiti a mano, N=30 per cella. Q-OUT: formati di patch (Markdown, XML, JSON, YAML, plain-diff) via istruzione, JSON anche nativo. Metrica: pass@1 via esecuzione test.
+- **Dati annidati:** config Terraform-like (6–7 livelli), ~1.000 domande per cella, calibrate a 40–60%. Formati: cinque non-tabellari. Metrica: accuratezza (substring) + token.
+- **Tabellare (nuova):** tabelle a 50/500/2.000/5.000 righe × **sette formati** {plain, Markdown table, XML, JSON records, YAML, CSV, TOON} × {lookup, aggregazione, filtro+conteggio}. Metrica: accuratezza + token; output = curva accuratezza/righe.
+- **Contesto lungo:** 200 item × lunghezze 8K/32K/128K (+1M dove supportato); usata sia per D9 (wrapping, cinque formati non-tabellari) sia per D11 (posizione istruzioni). Metrica: accuratezza + fedeltà citazioni.
+- **Multi-agente:** 50 task stile GAIA, orchestratore LangGraph fisso. Stato in cinque formati non-tabellari + forma compatta pseudocodice. Metrica: success rate + token input totali + costo.
 
 ### 5.9 Metriche e statistica
 
 - **Accuratezza / exact-match:** substring su gold canonicalizzato; F1 a livello di campo per l'estrazione.
 - **Pass@1:** esecuzione automatica di unit test (codice, find-replace).
-- **Giudice LLM** (task generativi): modello di vendor diverso dall'esecutore, per evitare il bias same-family visto in Checksum; calibrato a ≥95% di accordo umano su un sottocampione di 100.
+- **Giudice LLM** (task generativi): modello di vendor diverso dall'esecutore, per evitare il bias same-family visto in Checksum; calibrato a ≥95% di accordo umano su un sottocampione di 100. (Per i task con esecutore Qwen, giudice closed di uno dei due vendor.)
 - **Compliance schema (Q-OUT):** % di risposte che passano la validazione Pydantic al primo tentativo.
-- **Token e costo:** input, output, input cached separati; costo a listino.
-- **Test statistici:** Wilcoxon signed-rank su item appaiati; Bonferroni sui confronti multipli; effect size Cliff's δ accanto ai p-value. Mai confronti "X>Y" tra modelli (troppi confondenti): sempre per modello. Numerosità (300–1.000 per cella) → >90% di potenza per differenze di 5 pp ad α=0,01.
+- **Token e costo:** input, output, input cached separati; costo a listino per i modelli closed, in token+tempo per Qwen locale (segnalato a parte).
+- **Test statistici:** Wilcoxon signed-rank su item appaiati; Bonferroni sui confronti multipli (con sette formati i confronti per task crescono — la correzione va ricalibrata di conseguenza); effect size Cliff's δ accanto ai p-value. Mai confronti "X>Y" tra modelli (troppi confondenti): sempre per modello. Numerosità (300–1.000 per cella) → >90% di potenza per differenze di 5 pp ad α=0,01.
 
 ### 5.10 Confondenti controllati
 
 - Bias posizionale: ruotare l'ordine delle opzioni in classificazione; randomizzare la posizione del needle nel contesto lungo (eccetto in D11, dove la posizione è la variabile).
 - Micro-variazioni: stile di separatore/casing/spaziatura fissato per formato.
-- Bias del tokenizer: token contati col tool ufficiale di ciascun vendor; mai confronti di token diretti tra vendor.
+- Effort/reasoning: fissato a medio per tutti gli esperimenti tranne D3 e D4, dove è la variabile.
+- Bias del tokenizer: token contati col tool ufficiale di ciascun vendor (tiktoken / count_tokens / tokenizer Ollama); mai confronti di token diretti tra vendor.
 - Bias del giudice same-family: giudice di vendor diverso dall'esecutore.
-- Caching: cache pulita tra condizioni; tassi di token cached riportati a parte.
-- Drift versione/orario: tutti i formati per una data coppia (modello, task) eseguiti in un singolo batch entro 24 ore; snapshot di versione registrato.
+- Caching: cache pulita tra condizioni; tassi di token cached riportati a parte (Qwen locale non ha caching vendor).
+- Drift versione/orario: tutti i formati per una data coppia (modello, task) eseguiti in un singolo batch entro 24 ore; snapshot di versione registrato. Per Qwen, versione del modello e del runtime Ollama registrate.
 
 ### 5.11 Tooling (secondario)
 
-PromptFoo (orchestrazione multi-modello, export JSON per call); Pydantic (validazione schema, metrica Q-OUT); tiktoken / count_tokens API (conteggio per vendor); strict mode nativo dei vendor per i confronti Q-OUT; Python (statsmodels, scipy) per Wilcoxon e Cliff's δ, con notebook dei risultati e dati grezzi pubblicati.
+PromptFoo (orchestrazione multi-modello, export JSON per call); Pydantic (validazione schema, metrica Q-OUT); tiktoken / count_tokens API / tokenizer via Ollama (conteggio per modello); strict mode nativo dei vendor per i confronti Q-OUT su modelli closed, constrained decoding lato Ollama per Qwen dove disponibile; Ollama come runtime per Qwen2.5 in locale; Python (statsmodels, scipy) per Wilcoxon e Cliff's δ, con notebook dei risultati e dati grezzi pubblicati.
 
 ## 6. Bibliografia annotata
 
@@ -674,4 +669,4 @@ Le regole che l'articolo può cristallizzare, ciascuna con l'ancora di evidenza 
 
 ---
 
-*Fine knowledge base v2. Ogni affermazione numerica va verificata contro la fonte primaria citata prima della pubblicazione. Le pretese "OpenAI 73%" e "Anthropic 20–40% XML" non vanno propagate senza una fonte primaria.*
+*Fine knowledge base v3. Modifiche rispetto a v2: aggiunto Qwen2.5 (via Ollama) come sesto modello open-weight/locale; parametro effort/reasoning fissato a medio per tutti gli esperimenti tranne D3 e D4, dove è variabile a tre livelli; D2/D5/D8/D9 estesi ai formati applicabili (cinque non-tabellari) su tutti e sei i modelli; D3/D4/D6/D10 estesi mantenendo l'impostazione Q-OUT precedente (JSON nativo-strict vs altri formati via istruzione testuale); D7 e D7tab mantenuti; D14 (formati misti) rimosso; regola di applicabilità dei formati per tipo di contenuto (sette completi solo sui task tabellari, cinque non-tabellari altrove); limite del protocollo riscritto per riflettere la presenza di un modello open-weight. Ogni affermazione numerica va verificata contro la fonte primaria citata prima della pubblicazione. Le pretese "OpenAI 73%" e "Anthropic 20–40% XML" non vanno propagate senza una fonte primaria.*
