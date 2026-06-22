@@ -1,6 +1,6 @@
 # Project Memory
 
-This repository contains the scaffold for a scientific benchmark that measures how prompt format affects LLM performance across XML, Markdown, JSON, YAML, plain text, CSV, and TOON. The core protocol targets current closed-weight production models; local Ollama models are tracked as a separate extension for Jarvis1 smoke tests and comparisons.
+This repository contains the scaffold for a scientific benchmark that measures how prompt format affects LLM performance across XML, Markdown, JSON, YAML, plain text, CSV, and TOON. The protocol targets current production API models plus one local Ollama fallback model used as a comparable open-weight reference where the experiment semantics allow it.
 
 ## Models Under Test
 
@@ -15,6 +15,8 @@ Verify vendor API slugs against current API documentation before implementing ru
 ## Local/Ollama Models
 
 - Qwen 2.5 7B Instruct local quantized: `qwen2.5:7b-instruct-q4_K_M` via Ollama generation.
+
+Qwen is included as a peer model in all experiments where the comparison is meaningful, except D3 because native structured output is not comparable to vendor strict structured-output APIs. For D3/D4 only, reasoning effort is an explicit variable with `low`, `medium`, and `high`; every other experiment uses and records `medium` effort.
 
 ## Repository Layout
 

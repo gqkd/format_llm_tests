@@ -70,6 +70,8 @@ class OllamaRunner(ModelRunner):
         model_version = str(response.get("model") or params_used["model"])
         params_used = dict(params_used)
         params_used["model_version"] = model_version
+        if "reasoning_effort" in params_used:
+            params_used["effort_not_enforced"] = True
         return (
             str(response.get("response", "")),
             _optional_int(response.get("prompt_eval_count")),

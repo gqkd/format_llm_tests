@@ -36,16 +36,22 @@ experiments:
     manipulated_variable:
       axis: q-in
       levels:
-        - xml
+        - plain
         - markdown
+        - xml
+        - json
+        - yaml
       dimensions:
         - instruction_heavy
         - multi_section
-      notes: Claude-only instruction-heavy classification prompts.
+      notes: Instruction-heavy multi-section classification prompts over all non-tabular formats; XML vs Markdown on Claude is analyzed as a subset.
     models:
+      - gpt-5.5
+      - gpt-5.4
       - claude-opus-4-8
       - claude-sonnet-4-6
       - claude-haiku-4-5
+      - qwen2.5:7b-instruct-q4_K_M
     metrics:
       - accuracy
       - token_input
@@ -59,8 +65,8 @@ experiments:
       - output_format_fixed
       - task_content_fixed_across_formats
     hypothesis:
-      expected: XML accuracy is greater than or equal to Markdown on multi-section Claude prompts.
-      falsification_threshold: Falsified if Markdown exceeds XML by >1pp on Claude aggregate accuracy.
+      expected: XML is competitive with Markdown on Claude within the broader all-format comparison.
+      falsification_threshold: Falsified if Markdown exceeds XML by >1pp on Claude aggregate accuracy while other formats do not explain the spread.
 
   - question_id: D11
     suite: long_context
@@ -101,14 +107,17 @@ experiments:
       levels:
         - structured_native
         - prompt_only_json
-      notes: Input representation is fixed; only output constraint mechanism changes.
+      effort_levels:
+        - low
+        - medium
+        - high
+      notes: Input representation is fixed; output constraint mechanism is crossed with reasoning effort.
     models:
       - gpt-5.5
       - gpt-5.4
       - claude-opus-4-8
       - claude-sonnet-4-6
       - claude-haiku-4-5
-      - qwen2.5:7b-instruct-q4_K_M
     metrics:
       - schema_compliance
       - field_f1
@@ -132,7 +141,11 @@ experiments:
       levels:
         - json_strict_direct
         - reason_then_convert
-      notes: Reasoning input is fixed; only answer production protocol changes.
+      effort_levels:
+        - low
+        - medium
+        - high
+      notes: Reasoning input is fixed; answer production protocol is crossed with reasoning effort.
     models:
       - gpt-5.5
       - gpt-5.4
@@ -161,10 +174,11 @@ experiments:
     manipulated_variable:
       axis: q-in
       levels:
-        - json
-        - yaml
+        - plain
         - markdown
         - xml
+        - json
+        - yaml
       notes: Same nested canonical record, different input renderers.
     models:
       - gpt-5.5
@@ -196,7 +210,9 @@ experiments:
         - markdown
         - xml
         - json
-      notes: Code/input task is fixed; requested patch/output envelope varies.
+        - yaml
+        - plain
+      notes: Code/input task is fixed; requested patch/output envelope varies. JSON uses native strict structured output where a schema is available; all other formats are requested by text instruction.
     models:
       - gpt-5.5
       - gpt-5.4
@@ -224,9 +240,12 @@ experiments:
     manipulated_variable:
       axis: q-in
       levels:
+        - plain
         - markdown_table
-        - csv
+        - xml
         - json_records
+        - yaml
+        - csv
         - toon
       dimensions:
         - rows_50
@@ -256,35 +275,6 @@ experiments:
       expected: Compact formats win below context-pressure threshold; verbose formats degrade less above threshold.
       falsification_threshold: Falsified if no row-count-dependent crossover or slope difference is observed.
 
-  - question_id: D7
-    suite: nested_data
-    manipulated_variable:
-      axis: q-in
-      levels:
-        - yaml
-        - markdown
-        - json
-        - xml
-      notes: Claude-only nested-data comparison.
-    models:
-      - claude-opus-4-8
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-    metrics:
-      - accuracy_token
-      - token_input
-      - cost_usd
-    repetition:
-      seeds_or_repeated_calls: 3
-      temperature_policy: seed_when_supported_else_repeated_calls
-    fixed_confounders:
-      - format_separator_casing_spacing_constant
-      - output_format_fixed
-      - task_content_fixed_across_formats
-    hypothesis:
-      expected: On Claude models, XML is not the worst nested-data format.
-      falsification_threshold: Falsified if XML has the lowest accuracy for every Claude model by >=2pp.
-
   - question_id: D8
     suite: multi_agent
     manipulated_variable:
@@ -292,7 +282,10 @@ experiments:
       levels:
         - json
         - markdown
-        - compact_pseudocode_yaml
+        - yaml
+        - xml
+        - plain
+        - compact_pseudocode
       notes: Protocol labels this Q-IN+OUT; benchmark keeps output protocol fixed and varies serialized agent state only.
     models:
       - gpt-5.5
@@ -325,6 +318,9 @@ experiments:
       levels:
         - xml_document
         - json_array
+        - markdown
+        - yaml
+        - plain
       notes: Long-context wrapping only; instructions and answer constraints fixed.
     models:
       - gpt-5.5
@@ -355,7 +351,11 @@ experiments:
       axis: cost_probe
       levels:
         - json_strict
-      notes: Cross-suite Q-OUT cost probe with strict JSON held constant.
+        - markdown
+        - yaml
+        - xml
+        - plain
+      notes: Cross-suite Q-OUT cost probe comparing JSON strict native with text-instructed Markdown, YAML, XML, and plain outputs at equal information content.
     models:
       - gpt-5.5
       - gpt-5.4
@@ -374,43 +374,8 @@ experiments:
     fixed_confounders:
       - format_separator_casing_spacing_constant
       - input_format_fixed
-      - json_strict_output_fixed
+      - output_information_fixed
       - task_content_fixed_across_output_modes
     hypothesis:
-      expected: Strict JSON output tokens are at least 4x input-format overhead tokens.
-      falsification_threshold: Falsified if median output/input overhead ratio is <4.
-
-  - question_id: D14
-    suite: classification
-    manipulated_variable:
-      axis: pure_vs_mixed
-      levels:
-        - pure
-        - mixed
-      dimensions:
-        - classification
-        - reasoning
-      notes: Uses classification and reasoning items; suite field names primary suite for validator compatibility.
-    models:
-      - gpt-5.5
-      - gpt-5.4
-      - claude-opus-4-8
-      - claude-sonnet-4-6
-      - claude-haiku-4-5
-      - qwen2.5:7b-instruct-q4_K_M
-    metrics:
-      - accuracy
-      - accuracy_final_answer
-      - token_input
-      - cost_usd
-    repetition:
-      seeds_or_repeated_calls: 3
-      temperature_policy: seed_when_supported_else_repeated_calls
-    fixed_confounders:
-      - format_separator_casing_spacing_constant
-      - classification_option_order_rotated
-      - output_format_fixed
-      - task_content_fixed_across_formats
-    hypothesis:
-      expected: Mixed-format prompts perform worse than pure-format prompts.
-      falsification_threshold: Falsified if mixed is not worse by at least 2pp pooled across classification and reasoning.
+      expected: Output tokens cost at least 4x input tokens on closed models; XML output is most expensive, YAML/plain among the cheapest.
+      falsification_threshold: Falsified if median closed-model output/input price ratio is <4 or XML is not among the highest token-cost output formats.

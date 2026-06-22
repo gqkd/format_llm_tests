@@ -36,7 +36,6 @@ from templating.prompt_builder import (
     InstructionPosition,
     OutputRequest,
     PromptTask,
-    SectionFormats,
     build_prompt,
 )
 
@@ -68,10 +67,13 @@ FORMAT_LEVELS = {
     "csv": Format.CSV,
     "toon": Format.TOON,
     "compact_pseudocode_yaml": Format.YAML,
+    "compact_pseudocode": Format.YAML,
 }
 OUTPUT_FORMAT_LEVELS = {
+    "plain": Format.PLAIN,
     "markdown": Format.MARKDOWN,
     "xml": Format.XML,
+    "yaml": Format.YAML,
     "json": Format.JSON,
     "prompt_only_json": Format.JSON,
     "json_strict_direct": Format.JSON,
@@ -118,6 +120,7 @@ class PlannedCall:
     native_output: dict[str, Any] | None
     input_format: str | None
     output_format: str | None
+    reasoning_effort: str
 
 
 @dataclass(frozen=True)
@@ -205,8 +208,8 @@ class ExperimentOrchestrator:
             items = items[:limit]
         seeds = tuple(range(experiment.repetition.seeds_or_repeated_calls))
         return [
-            _planned_call(experiment, model, level, seed, item)
-            for model, level, seed, item in _call_matrix(experiment, seeds, items)
+            _planned_call(experiment, model, level, effort, seed, item)
+            for model, level, effort, seed, item in _call_matrix(experiment, seeds, items)
         ]
 
     def _execute_calls(
@@ -268,8 +271,6 @@ class ExperimentOrchestrator:
 def _items_for_experiment(experiment: Experiment) -> list[SuiteItem]:
     if experiment.question_id == "D10":
         return classification.load_items()[:10] + reasoning.load_items()[:10]
-    if experiment.question_id == "D14":
-        return classification.load_items() + reasoning.load_items()
     loader = SUITE_LOADERS[experiment.suite]
     return loader()
 
@@ -278,8 +279,12 @@ def _call_matrix(
     experiment: Experiment,
     seeds: tuple[int, ...],
     items: list[SuiteItem],
-) -> Iterable[tuple[str, str, int, SuiteItem]]:
-    return product(experiment.models, experiment.manipulated_variable.levels, seeds, items)
+) -> Iterable[tuple[str, str, str, int, SuiteItem]]:
+    return product(experiment.models, experiment.manipulated_variable.levels, _effort_levels_for(experiment), seeds, items)
+
+
+def _effort_levels_for(experiment: Experiment) -> tuple[str, ...]:
+    return experiment.manipulated_variable.effort_levels or ("medium",)
 
 
 def _validate_limit(limit: int | None) -> None:
@@ -293,9 +298,9 @@ def _runner_for(model: str, runners: dict[str, ModelRunner], runner_factory: Run
     return runners[model]
 
 
-def _planned_call(experiment: Experiment, model: str, level: str, seed: int, item: SuiteItem) -> PlannedCall:
+def _planned_call(experiment: Experiment, model: str, level: str, effort: str, seed: int, item: SuiteItem) -> PlannedCall:
     built_prompt = _build_call_prompt(experiment, level, item)
-    call_id = _call_id(experiment.question_id, model, item.item_id, level, seed)
+    call_id = _call_id(experiment.question_id, model, item.item_id, level, effort, seed)
     return PlannedCall(
         call_id=call_id,
         experiment_id=experiment.question_id,
@@ -307,6 +312,7 @@ def _planned_call(experiment: Experiment, model: str, level: str, seed: int, ite
         native_output=built_prompt.native_output,
         input_format=_input_format_for(experiment, level),
         output_format=_output_format_for(experiment, level),
+        reasoning_effort=effort,
     )
 
 
@@ -325,12 +331,6 @@ def _build_call_prompt(experiment: Experiment, level: str, item: SuiteItem):
             input_format=Format.MARKDOWN,
             experiment_mode=ExperimentMode.Q_IN,
             instruction_position=INSTRUCTION_POSITIONS[level],
-        )
-    if experiment.manipulated_variable.axis == "pure_vs_mixed" and level == "mixed":
-        return build_prompt(
-            task,
-            experiment_mode=ExperimentMode.Q_IN,
-            section_formats=SectionFormats(instructions=Format.MARKDOWN, data=Format.XML),
         )
     return build_prompt(
         task,
@@ -362,14 +362,14 @@ def _default_query(item: SuiteItem) -> str:
 
 
 def _output_request(level: str, item: SuiteItem) -> OutputRequest:
-    if level == "structured_native" and item.output_schema is not None:
+    if level in {"structured_native", "json_strict", "json"} and item.output_schema is not None:
         return OutputRequest.structured_native(Format.JSON, item.output_schema.model_json_schema())
     output_format = OUTPUT_FORMAT_LEVELS.get(level, Format.JSON)
     return OutputRequest.text_format(output_format)
 
 
 def _input_format_for(experiment: Experiment, level: str) -> str | None:
-    if experiment.manipulated_variable.axis in {"q-in", "state_serialization", "pure_vs_mixed"}:
+    if experiment.manipulated_variable.axis in {"q-in", "state_serialization"}:
         return level
     return None
 
@@ -387,6 +387,7 @@ def _run_params(call: PlannedCall, batch_started_at: str) -> RunParams:
         input_format=call.input_format,
         output_format=call.output_format,
         seed=call.seed,
+        reasoning_effort=call.reasoning_effort,
         native_output=call.native_output,
         metadata={
             "call_id": call.call_id,
@@ -427,6 +428,7 @@ def _raw_record(
         "model_version": model_version,
         "task_id": call.item.item_id,
         "level": call.level,
+        "reasoning_effort": call.reasoning_effort,
         "seed": call.seed,
         "input_format": call.input_format,
         "output_format": call.output_format,
@@ -435,8 +437,8 @@ def _raw_record(
     }
 
 
-def _call_id(experiment_id: str, model: str, task_id: str, level: str, seed: int) -> str:
-    key = f"{experiment_id}|{model}|{task_id}|{level}|{seed}"
+def _call_id(experiment_id: str, model: str, task_id: str, level: str, effort: str, seed: int) -> str:
+    key = f"{experiment_id}|{model}|{task_id}|{level}|{effort}|{seed}"
     digest = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
     return f"{experiment_id}-{digest}"
 

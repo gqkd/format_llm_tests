@@ -28,6 +28,7 @@ _RESERVED_PARAM_KEYS = frozenset(
         "temperature",
         "seed",
         "native_output",
+        "reasoning_effort",
         "dropped_params",
     }
 )
@@ -44,8 +45,16 @@ class RunParams(BaseModel):
     output_format: str | None = None
     seed: int | None = None
     temperature: float | None = None
+    reasoning_effort: str | None = "medium"
     native_output: dict[str, Any] | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("reasoning_effort")
+    @classmethod
+    def validate_reasoning_effort(cls, value: str | None) -> str | None:
+        if value is not None and value not in {"low", "medium", "high"}:
+            raise ValueError("reasoning_effort must be one of low, medium, high")
+        return value
 
     @field_validator("metadata")
     @classmethod
@@ -168,6 +177,7 @@ class ModelRunner(ABC):
             params_used["temperature"] = params.temperature
         if params.seed is not None:
             params_used["seed"] = params.seed
+        params_used["reasoning_effort"] = params.reasoning_effort or "medium"
         if params.native_output is not None:
             params_used["native_output"] = params.native_output
         return params_used
@@ -180,7 +190,7 @@ class ModelRunner(ABC):
 
     def _drop_unsupported_param(self, exc: Exception, params_used: dict[str, Any]) -> dict[str, Any] | None:
         message = str(exc).lower()
-        for param_name in ("temperature", "seed"):
+        for param_name in ("temperature", "seed", "reasoning_effort"):
             if param_name in params_used and param_name in message and _message_contains_any(message, ("unsupported", "not supported", "unknown", "unrecognized")):
                 updated = dict(params_used)
                 updated.pop(param_name)

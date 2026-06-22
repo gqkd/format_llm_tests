@@ -53,6 +53,8 @@ class OpenAIRunner(ModelRunner):
             request["temperature"] = params_used["temperature"]
         if "seed" in params_used:
             request["seed"] = params_used["seed"]
+        if "reasoning_effort" in params_used:
+            request["reasoning_effort"] = params_used["reasoning_effort"]
         if "native_output" in params_used:
             request["text"] = _openai_text_format(params_used["native_output"])
         return request

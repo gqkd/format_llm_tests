@@ -178,6 +178,17 @@ def test_openai_runner_includes_native_structured_output_schema(tmp_path: Path) 
     assert client.calls[0]["text"]["format"]["strict"] is True
 
 
+def test_openai_runner_passes_reasoning_effort(tmp_path: Path) -> None:
+    client = FakeOpenAIClient([FakeOpenAIResponse(text="answer", input_tokens=8, output_tokens=4)])
+    runner = OpenAIRunner(client=client, raw_log_dir=tmp_path, clock=lambda: 1.0)
+
+    result = runner.run(prompt="prompt", params=RunParams(model="gpt-5.5", reasoning_effort="high"))
+
+    assert result.error is None
+    assert client.calls[0]["reasoning_effort"] == "high"
+    assert result.params_used["reasoning_effort"] == "high"
+
+
 def test_openai_runner_records_refusal_as_error(tmp_path: Path) -> None:
     client = FakeOpenAIClient(
         [
@@ -293,6 +304,20 @@ def test_anthropic_runner_includes_strict_tool_for_native_structured_output(tmp_
     assert tool["strict"] is True
 
 
+def test_anthropic_runner_maps_reasoning_effort_to_thinking_budget(tmp_path: Path) -> None:
+    client = FakeAnthropicClient(
+        responses=[FakeAnthropicResponse(text="answer", input_tokens=8, output_tokens=3)],
+        count_tokens=8,
+    )
+    runner = AnthropicRunner(client=client, raw_log_dir=tmp_path, clock=lambda: 1.0)
+
+    result = runner.run(prompt="prompt", params=RunParams(model="claude-sonnet-4-6", reasoning_effort="low"))
+
+    assert result.error is None
+    assert client.calls[0]["thinking"] == {"type": "enabled", "budget_tokens": 1024}
+    assert result.params_used["anthropic_thinking_budget_tokens"] == 1024
+
+
 def test_anthropic_runner_extracts_tool_use_input_for_structured_output(tmp_path: Path) -> None:
     client = FakeAnthropicClient(
         responses=[
@@ -338,6 +363,7 @@ def test_ollama_runner_parses_generate_response_and_estimates_tokens(tmp_path: P
     assert result.input_tokens == 12
     assert result.output_tokens == 4
     assert result.params_used["model_version"] == "qwen2.5:7b-instruct-q4_K_M"
+    assert result.params_used["effort_not_enforced"] is True
     assert client.calls[0]["endpoint"] == "/api/generate"
     assert client.calls[0]["payload"]["stream"] is False
 

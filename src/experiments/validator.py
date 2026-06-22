@@ -61,9 +61,10 @@ class ManipulatedVariable(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    axis: Literal["q-in", "q-out", "instruction_position", "pure_vs_mixed", "state_serialization", "cost_probe"]
+    axis: Literal["q-in", "q-out", "instruction_position", "state_serialization", "cost_probe"]
     levels: tuple[str, ...] = Field(min_length=1)
     dimensions: tuple[str, ...] = ()
+    effort_levels: tuple[Literal["low", "medium", "high"], ...] = ()
     notes: str | None = None
 
 

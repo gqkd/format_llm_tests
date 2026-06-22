@@ -19,6 +19,12 @@ from dotenv import load_dotenv
 
 from runners.base import ModelRunner, RunParams
 
+ANTHROPIC_THINKING_BUDGET_TOKENS = {
+    "low": 1024,
+    "medium": 4096,
+    "high": 8192,
+}
+
 
 class AnthropicRunner(ModelRunner):
     """Runner for Claude Opus 4.8, Sonnet 4.6, and Haiku 4.5 compatible models."""
@@ -61,6 +67,10 @@ class AnthropicRunner(ModelRunner):
         }
         if "temperature" in params_used:
             request["temperature"] = params_used["temperature"]
+        if "reasoning_effort" in params_used:
+            budget_tokens = ANTHROPIC_THINKING_BUDGET_TOKENS[params_used["reasoning_effort"]]
+            request["thinking"] = {"type": "enabled", "budget_tokens": budget_tokens}
+            params_used["anthropic_thinking_budget_tokens"] = budget_tokens
         if "native_output" in params_used:
             request.update(_anthropic_tool_config(params_used["native_output"]))
         return request

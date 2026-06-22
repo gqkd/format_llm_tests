@@ -24,13 +24,11 @@ EXPECTED_EXPERIMENT_IDS = {
     "D4",
     "D5",
     "D6",
-    "D7",
     "D7tab",
     "D8",
     "D9",
     "D10",
     "D11",
-    "D14",
 }
 
 
@@ -39,7 +37,7 @@ def test_experiments_yaml_declares_all_protocol_questions() -> None:
 
     assert isinstance(config, ExperimentConfig)
     assert {experiment.question_id for experiment in config.experiments} == EXPECTED_EXPERIMENT_IDS
-    assert len(config.experiments) == 13
+    assert len(config.experiments) == 11
 
 
 def test_experiments_reference_known_suites_models_and_metrics() -> None:
@@ -84,11 +82,28 @@ def test_d8_preserves_project_rule_by_fixing_output_protocol() -> None:
 
 def test_local_qwen_is_included_in_all_model_experiments() -> None:
     config = validate_experiments_config(CONFIG_PATH)
-    all_model_ids = {"D1", "D3", "D4", "D5", "D6", "D7tab", "D8", "D9", "D10", "D11", "D14"}
+    all_model_ids = {"D1", "D2", "D4", "D5", "D6", "D7tab", "D8", "D9", "D10", "D11"}
 
     for experiment in config.experiments:
         if experiment.question_id in all_model_ids:
             assert "qwen2.5:7b-instruct-q4_K_M" in experiment.models
+
+
+def test_d3_excludes_qwen_because_native_structured_output_is_not_comparable() -> None:
+    config = validate_experiments_config(CONFIG_PATH)
+    d3 = next(experiment for experiment in config.experiments if experiment.question_id == "D3")
+
+    assert "qwen2.5:7b-instruct-q4_K_M" not in d3.models
+
+
+def test_effort_is_variable_only_for_d3_and_d4() -> None:
+    config = validate_experiments_config(CONFIG_PATH)
+
+    for experiment in config.experiments:
+        if experiment.question_id in {"D3", "D4"}:
+            assert experiment.manipulated_variable.effort_levels == ("low", "medium", "high")
+        else:
+            assert experiment.manipulated_variable.effort_levels == ()
 
 
 def test_validator_rejects_unknown_suite_model_metric_and_low_repetitions(tmp_path: Path) -> None:

@@ -10,7 +10,7 @@ from runners.base import ModelRunner, RunParams, RunResult
 
 
 D5_MODEL_COUNT = 6
-D5_LEVEL_COUNT = 4
+D5_LEVEL_COUNT = 5
 D5_SEED_COUNT = 3
 
 
@@ -117,6 +117,24 @@ def test_limit_applies_to_first_n_items_per_cell(tmp_path: Path) -> None:
     assert len(cell_counts) == D5_MODEL_COUNT * D5_LEVEL_COUNT * D5_SEED_COUNT
 
 
+def test_d4_plans_all_reasoning_effort_levels(tmp_path: Path) -> None:
+    orchestrator = _orchestrator(tmp_path, FakeRunner())
+
+    calls = orchestrator.plan_experiment("D4", limit=1)
+
+    assert {call.reasoning_effort for call in calls} == {"low", "medium", "high"}
+    assert len(calls) == 6 * 2 * 3 * 3
+
+
+def test_runner_receives_planned_reasoning_effort(tmp_path: Path) -> None:
+    runner = FakeRunner()
+    orchestrator = _orchestrator(tmp_path, runner)
+
+    orchestrator.run_experiment("D4", dry_run=False, limit=1)
+
+    assert {params.reasoning_effort for _, params in runner.calls} == {"low", "medium", "high"}
+
+
 def test_cli_dry_run_prints_counts(tmp_path: Path, capsys) -> None:
     from run import main
 
@@ -136,7 +154,7 @@ def test_cli_dry_run_prints_counts(tmp_path: Path, capsys) -> None:
 
     assert exit_code == 0
     assert "Experiment(s): D5" in output
-    assert "Planned calls: 72" in output
+    assert "Planned calls: 90" in output
     assert "API calls made: 0" in output
     assert "Estimated cost USD:" in output
 
